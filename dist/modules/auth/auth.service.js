@@ -6,9 +6,70 @@ const error_response_1 = require("../../utils/response/error.response");
 const hash_security_1 = require("../../utils/security/hash.security");
 const email_event_1 = require("../../utils/event/email.event");
 const otp_1 = require("../../utils/otp");
+const token_security_1 = require("../../utils/security/token.security");
+const google_auth_library_1 = require("google-auth-library");
 class AuthenticationService {
     userModel = new user_repository_1.UserRepository(user_model_1.UserModel);
     constructor() { }
+    async verifyGmailAccount(idToken) {
+        const client = new google_auth_library_1.OAuth2Client();
+        const ticket = await client.verifyIdToken({
+            idToken,
+            audience: process.env.WEB_CLIENT_IDS?.split(",") || [],
+        });
+        const payload = ticket.getPayload();
+        if (!payload?.email_verified) {
+            throw new error_response_1.BadRequestException("Fail to verify this google account");
+        }
+        return payload;
+    }
+    signupWtihGmail = async (req, res) => {
+        const { idToken } = req.body;
+        const { email, family_name, given_name, picture } = await this.verifyGmailAccount(idToken);
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+            },
+        });
+        if (user) {
+            if (user.provider === user_model_1.ProviderEnum.GOOGLE) {
+                return await this.loginWtihGmail(req, res);
+            }
+            throw new error_response_1.ConflictException(`Email exist with another provider :${user.provider}`);
+        }
+        const [newUser] = (await this.userModel.create({
+            data: [
+                {
+                    firstName: given_name,
+                    lastName: family_name,
+                    email: email,
+                    profileImage: picture,
+                    confirmedAt: new Date(),
+                    provider: user_model_1.ProviderEnum.GOOGLE,
+                },
+            ],
+        })) || [];
+        if (!newUser) {
+            throw new error_response_1.BadRequestException("Fail to signup gmail please try again later");
+        }
+        const credentials = await (0, token_security_1.createLoginCredentials)(newUser);
+        return res.status(201).json({ message: "Done", data: { credentials } });
+    };
+    loginWtihGmail = async (req, res) => {
+        const { idToken } = req.body;
+        const { email } = await this.verifyGmailAccount(idToken);
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                provider: user_model_1.ProviderEnum.GOOGLE,
+            },
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("Not register account or register with another provider");
+        }
+        const credentials = await (0, token_security_1.createLoginCredentials)(user);
+        return res.status(201).json({ message: "Done", data: { credentials } });
+    };
     signup = async (req, res) => {
         let { userName, email, password } = req.body;
         console.log({ userName, email, password });
@@ -64,8 +125,25 @@ class AuthenticationService {
         });
         return res.json({ message: "Done" });
     };
-    login = (req, res) => {
-        return res.json({ message: "Done", data: req.body });
+    login = async (req, res) => {
+        const { email, password } = req.body;
+        const user = await this.userModel.findOne({
+            filter: { email, provider: user_model_1.ProviderEnum.SYSTEM },
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("In-valid Login Data");
+        }
+        if (!user.confirmedAt) {
+            throw new error_response_1.BadRequestException("Verify your account ");
+        }
+        if (!(await (0, hash_security_1.compareHash)(password, user.password))) {
+            throw new error_response_1.NotFoundException("In-valid Login Data");
+        }
+        const credentials = await (0, token_security_1.createLoginCredentials)(user);
+        return res.json({
+            message: "Done",
+            data: { credentials },
+        });
     };
 }
 exports.default = new AuthenticationService();

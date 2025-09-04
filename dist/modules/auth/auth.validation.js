@@ -1,19 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.confirmEmail = exports.signup = exports.login = void 0;
+exports.signupWithGmail = exports.confirmEmail = exports.signup = exports.login = void 0;
 const zod_1 = require("zod");
-const validation_middeware_1 = require("../../middleware/validation.middeware");
+const validation_middleware_1 = require("../../middleware/validation.middleware");
 exports.login = {
     body: zod_1.z.strictObject({
-        email: validation_middeware_1.generalFields.email,
-        password: validation_middeware_1.generalFields.password,
+        email: validation_middleware_1.generalFields.email,
+        password: validation_middleware_1.generalFields.password,
     }),
 };
 exports.signup = {
     body: exports.login.body
         .extend({
-        userName: validation_middeware_1.generalFields.userName,
-        confirmPassword: validation_middeware_1.generalFields.confirmPassword,
+        userName: validation_middleware_1.generalFields.userName,
+        confirmPassword: validation_middleware_1.generalFields.confirmPassword,
     })
         .superRefine((data, ctx) => {
         console.log({ data, ctx });
@@ -28,7 +28,12 @@ exports.signup = {
 };
 exports.confirmEmail = {
     body: zod_1.z.strictObject({
-        email: validation_middeware_1.generalFields.email,
-        otp: validation_middeware_1.generalFields.otp,
+        email: validation_middleware_1.generalFields.email,
+        otp: validation_middleware_1.generalFields.otp,
+    }),
+};
+exports.signupWithGmail = {
+    body: zod_1.z.strictObject({
+        idToken: zod_1.z.string(),
     }),
 };

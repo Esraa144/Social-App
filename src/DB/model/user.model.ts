@@ -1,4 +1,4 @@
-import { model, models, Schema } from "mongoose";
+import { model, models, Schema, HydratedDocument } from "mongoose";
 
 export enum GenderEnum {
   male = "male",
@@ -8,6 +8,11 @@ export enum GenderEnum {
 export enum RoleEnum {
   user = "user",
   admin = "admin",
+}
+
+export enum ProviderEnum {
+  GOOGLE = "GOOGLE",
+  SYSTEM = "SYSTEM",
 }
 export interface IUser {
   //   _id: Types.ObjectId;
@@ -26,9 +31,12 @@ export interface IUser {
 
   phone?: string;
   address?: string;
+  profileImage?: string;
+  coverImages?: string[];
 
   gender: GenderEnum;
   role: RoleEnum;
+  provider: ProviderEnum;
 
   createdAt: Date;
   updatedAt?: Date;
@@ -43,15 +51,27 @@ const userSchema = new Schema<IUser>(
     confirmEmailOtp: { type: String },
     confirmedAt: { type: Date },
 
-    password: { type: String, required: true },
+    password: {
+      type: String,
+      required: function () {
+        return this.provider === ProviderEnum.GOOGLE ? false : true;
+      },
+    },
     resetPasswordOtp: { type: String },
     changeCredentialsTime: { type: Date },
 
     phone: { type: String },
     address: { type: String },
 
+    profileImage: { type: String },
+    coverImages: [String],
     gender: { type: String, enum: GenderEnum, default: GenderEnum.male },
     role: { type: String, enum: RoleEnum, default: RoleEnum.user },
+    provider: {
+      type: String,
+      enum: ProviderEnum,
+      default: ProviderEnum.SYSTEM,
+    },
 
     createdAt: { type: Date },
     updatedAt: { type: Date },
@@ -74,3 +94,4 @@ userSchema
   });
 
 export const UserModel = models.User || model<IUser>("User", userSchema);
+export type HUserDocument = HydratedDocument<IUser>;

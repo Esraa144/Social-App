@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { config } from "dotenv";
 config({ path: resolve("./config/.env.development") });
 
-//LOAD ESPRESS AND EXPRESS TYPE
+//LOAD EXPRESS AND EXPRESS TYPE
 import type { Request, Response, Express } from "express";
 import express from "express";
 
@@ -14,6 +14,7 @@ import { rateLimit } from "express-rate-limit";
 
 //MODULE ROUTING
 import authController from "./modules/auth/auth.controller";
+import userController from "./modules/user/user.controller";
 import { globalErrorHandling } from "./utils/response/error.response";
 import connectDB from "./DB/connection.db";
 
@@ -39,6 +40,7 @@ const bootstrap = async (): Promise<void> => {
   });
   //sub-app-routing-modules
   app.use("/auth", authController);
+  app.use("/user", userController);
 
   //IN-VALID ROUTING
   app.use("{/*dummy}", (req: Request, res: Response) => {

@@ -11,6 +11,7 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = require("express-rate-limit");
 const auth_controller_1 = __importDefault(require("./modules/auth/auth.controller"));
+const user_controller_1 = __importDefault(require("./modules/user/user.controller"));
 const error_response_1 = require("./utils/response/error.response");
 const connection_db_1 = __importDefault(require("./DB/connection.db"));
 const limiter = (0, express_rate_limit_1.rateLimit)({
@@ -27,6 +28,7 @@ const bootstrap = async () => {
         res.json({ message: "Welcome To Social App Backend Landing Page❤❤ " });
     });
     app.use("/auth", auth_controller_1.default);
+    app.use("/user", user_controller_1.default);
     app.use("{/*dummy}", (req, res) => {
         return res.status(404).json({
             message: "In-Valid app routing please check you method or your URL❌",

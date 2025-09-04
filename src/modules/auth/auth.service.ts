@@ -1,21 +1,100 @@
 import type { Request, Response } from "express";
 import type {
   IConfirmEmailBodyInputsDTto,
+  IGmailDTto,
+  ILoginBodyInputsDTto,
   ISignupBodyInputsDTto,
 } from "./auth.dto";
-import { UserModel } from "../../DB/model/user.model";
+import { ProviderEnum, UserModel } from "../../DB/model/user.model";
 import { UserRepository } from "../../DB/repository/user.repository ";
 import {
+  BadRequestException,
   ConflictException,
   NotFoundException,
 } from "../../utils/response/error.response";
 import { compareHash, generateHash } from "../../utils/security/hash.security";
 import { emailEvent } from "../../utils/event/email.event";
 import { generateNumberOtp } from "../../utils/otp";
+import { createLoginCredentials } from "../../utils/security/token.security";
+import { OAuth2Client, TokenPayload } from "google-auth-library";
 
 class AuthenticationService {
   private userModel = new UserRepository(UserModel);
   constructor() {}
+  private async verifyGmailAccount(idToken: string): Promise<TokenPayload> {
+    const client = new OAuth2Client();
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.WEB_CLIENT_IDS?.split(",") || [],
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email_verified) {
+      throw new BadRequestException("Fail to verify this google account");
+    }
+    return payload;
+  }
+  signupWtihGmail = async (req: Request, res: Response): Promise<Response> => {
+    const { idToken }: IGmailDTto = req.body;
+    const { email, family_name, given_name, picture } =
+      await this.verifyGmailAccount(idToken);
+
+    const user = await this.userModel.findOne({
+      filter: {
+        email,
+      },
+    });
+    if (user) {
+      if (user.provider === ProviderEnum.GOOGLE) {
+        return await this.loginWtihGmail(req, res);
+      }
+      throw new ConflictException(
+        `Email exist with another provider :${user.provider}`
+      );
+    }
+
+    const [newUser] =
+      (await this.userModel.create({
+        data: [
+          {
+            firstName: given_name as string,
+            lastName: family_name as string,
+            email: email as string,
+            profileImage: picture as string,
+            confirmedAt: new Date(),
+            provider: ProviderEnum.GOOGLE,
+          },
+        ],
+      })) || [];
+
+    if (!newUser) {
+      throw new BadRequestException(
+        "Fail to signup gmail please try again later"
+      );
+    }
+    const credentials = await createLoginCredentials(newUser);
+
+    return res.status(201).json({ message: "Done", data: { credentials } });
+  };
+
+  loginWtihGmail = async (req: Request, res: Response): Promise<Response> => {
+    const { idToken }: IGmailDTto = req.body;
+    const { email } = await this.verifyGmailAccount(idToken);
+
+    const user = await this.userModel.findOne({
+      filter: {
+        email,
+        provider: ProviderEnum.GOOGLE,
+      },
+    });
+    if (!user) {
+      throw new NotFoundException(
+        "Not register account or register with another provider"
+      );
+    }
+    const credentials = await createLoginCredentials(user);
+
+    return res.status(201).json({ message: "Done", data: { credentials } });
+  };
   /**
    *
    * @param req -Express.Request
@@ -82,8 +161,26 @@ class AuthenticationService {
     return res.json({ message: "Done" });
   };
 
-  login = (req: Request, res: Response): Response => {
-    return res.json({ message: "Done", data: req.body });
+  login = async (req: Request, res: Response): Promise<Response> => {
+    const { email, password }: ILoginBodyInputsDTto = req.body;
+    const user = await this.userModel.findOne({
+      filter: { email, provider: ProviderEnum.SYSTEM },
+    });
+    if (!user) {
+      throw new NotFoundException("In-valid Login Data");
+    }
+    if (!user.confirmedAt) {
+      throw new BadRequestException("Verify your account ");
+    }
+    if (!(await compareHash(password, user.password))) {
+      throw new NotFoundException("In-valid Login Data");
+    }
+    const credentials = await createLoginCredentials(user);
+
+    return res.json({
+      message: "Done",
+      data: { credentials },
+    });
   };
 }
 
