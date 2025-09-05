@@ -14,13 +14,31 @@ router.patch(
 router.post(
   "/signup-gmail",
   validation(validators.signupWithGmail),
-  authService.signupWtihGmail
+  authService.signupWithGmail
 );
 router.post(
   "/login-gmail",
   validation(validators.signupWithGmail),
-  authService.loginWtihGmail
+  authService.loginWithGmail
 );
 
 router.post("/login", validation(validators.login), authService.login);
+
+router.patch(
+  "/send-forgot-password",
+  validation(validators.sendForgotPasswordCode),
+  authService.sendForgotPasswordCode
+);
+
+router.patch(
+  "/verify-forgot-password",
+  validation(validators.verifyForgotPassword),
+  authService.sendForgotPasswordCode
+);
+
+router.patch(
+  "/reset-forgot-password",
+  validation(validators.resetForgotPassword),
+  authService.resetForgotPassword
+);
 export default router;

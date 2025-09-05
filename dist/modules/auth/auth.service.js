@@ -23,7 +23,7 @@ class AuthenticationService {
         }
         return payload;
     }
-    signupWtihGmail = async (req, res) => {
+    signupWithGmail = async (req, res) => {
         const { idToken } = req.body;
         const { email, family_name, given_name, picture } = await this.verifyGmailAccount(idToken);
         const user = await this.userModel.findOne({
@@ -33,7 +33,7 @@ class AuthenticationService {
         });
         if (user) {
             if (user.provider === user_model_1.ProviderEnum.GOOGLE) {
-                return await this.loginWtihGmail(req, res);
+                return await this.loginWithGmail(req, res);
             }
             throw new error_response_1.ConflictException(`Email exist with another provider :${user.provider}`);
         }
@@ -55,7 +55,7 @@ class AuthenticationService {
         const credentials = await (0, token_security_1.createLoginCredentials)(newUser);
         return res.status(201).json({ message: "Done", data: { credentials } });
     };
-    loginWtihGmail = async (req, res) => {
+    loginWithGmail = async (req, res) => {
         const { idToken } = req.body;
         const { email } = await this.verifyGmailAccount(idToken);
         const user = await this.userModel.findOne({
@@ -143,6 +143,82 @@ class AuthenticationService {
         return res.json({
             message: "Done",
             data: { credentials },
+        });
+    };
+    sendForgotPasswordCode = async (req, res) => {
+        const { email } = req.body;
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                provider: user_model_1.ProviderEnum.SYSTEM,
+                confirmedAt: { $exists: true },
+            },
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("In-valid Account due to one of the following reasons [not register , in-valid provider , not confirmed account]");
+        }
+        const otp = (0, otp_1.generateNumberOtp)();
+        const result = await this.userModel.updateOne({
+            filter: { email },
+            update: {
+                resetPasswordOtp: await (0, hash_security_1.generateHash)(String(otp)),
+            },
+        });
+        if (!result.matchedCount) {
+            throw new error_response_1.BadRequestException("Fail to send thr reset code pease try again later");
+        }
+        email_event_1.emailEvent.emit("resetPassword", { to: email, otp });
+        return res.json({
+            message: "Done",
+        });
+    };
+    verifyForgotPassword = async (req, res) => {
+        const { email, otp } = req.body;
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                provider: user_model_1.ProviderEnum.SYSTEM,
+                resetPasswordOtp: { $exists: true },
+            },
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("In-valid Account due to one of the following reasons [not register , in-valid provider , not confirmed account]");
+        }
+        if (!(await (0, hash_security_1.compareHash)(otp, user.resetPasswordOtp))) {
+            throw new error_response_1.ConflictException("invalid otp");
+        }
+        return res.json({
+            message: "Done",
+        });
+    };
+    resetForgotPassword = async (req, res) => {
+        const { email, otp, password } = req.body;
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                provider: user_model_1.ProviderEnum.SYSTEM,
+                resetPasswordOtp: { $exists: true },
+            },
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("In-valid Account due to one of the following reasons [not register , in-valid provider , not confirmed account]");
+        }
+        if (!(await (0, hash_security_1.compareHash)(otp, user.resetPasswordOtp))) {
+            throw new error_response_1.ConflictException("invalid otp");
+        }
+        const result = await this.userModel.updateOne({
+            filter: { email },
+            update: {
+                password: await (0, hash_security_1.generateHash)(password),
+                changeCredentialsTime: new Date(),
+                $unset: { resetPasswordOtp: 1 },
+            },
+        });
+        if (!result.matchedCount) {
+            throw new error_response_1.BadRequestException("Fail to reset account password");
+        }
+        return res.json({
+            message: "Done",
         });
     };
 }

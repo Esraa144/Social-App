@@ -16,3 +16,13 @@ emailEvent.on("ConfirmEmail", async (data: IEmail) => {
     console.log(`Fail to send email`, error);
   }
 });
+
+emailEvent.on("resetPassword", async (data: IEmail) => {
+  try {
+    data.subject = "Reset-Password";
+    data.html = verifyEmail({ otp: data.otp, title: "Reset Code" });
+    await sendEmail(data);
+  } catch (error) {
+    console.log(`Fail to send email`, error);
+  }
+});
