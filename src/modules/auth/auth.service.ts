@@ -16,10 +16,12 @@ import {
   NotFoundException,
 } from "../../utils/response/error.response";
 import { compareHash, generateHash } from "../../utils/security/hash.security";
-import { emailEvent } from "../../utils/event/email.event";
+import { emailEvent } from "../../utils/email/email.event";
 import { generateNumberOtp } from "../../utils/otp";
 import { createLoginCredentials } from "../../utils/security/token.security";
 import { OAuth2Client, TokenPayload } from "google-auth-library";
+import { successResponse } from "../../utils/response/success.response";
+import { ILoginResponse } from "./auth.entities";
 
 class AuthenticationService {
   private userModel = new UserRepository(UserModel);
@@ -76,7 +78,11 @@ class AuthenticationService {
     }
     const credentials = await createLoginCredentials(newUser);
 
-    return res.status(201).json({ message: "Done", data: { credentials } });
+    return successResponse<ILoginResponse>({
+      res,
+      statusCode: 201,
+      data: { credentials },
+    });
   };
 
   loginWithGmail = async (req: Request, res: Response): Promise<Response> => {
@@ -96,7 +102,7 @@ class AuthenticationService {
     }
     const credentials = await createLoginCredentials(user);
 
-    return res.status(201).json({ message: "Done", data: { credentials } });
+    return successResponse<ILoginResponse>({ res, data: { credentials } });
   };
   /**
    *
@@ -116,13 +122,12 @@ class AuthenticationService {
         lean: true,
       },
     });
-    console.log(checkUserExist);
     if (checkUserExist) {
       throw new ConflictException("Email Exist");
     }
 
     const otp = generateNumberOtp();
-    const user = await this.userModel.createUser({
+    await this.userModel.createUser({
       data: [
         {
           userName,
@@ -136,7 +141,7 @@ class AuthenticationService {
       to: email,
       otp: otp,
     });
-    return res.status(201).json({ message: "Done", data: { user } });
+    return successResponse({ res, statusCode: 201 });
   };
 
   confirmEmail = async (req: Request, res: Response): Promise<Response> => {
@@ -161,7 +166,7 @@ class AuthenticationService {
         $unset: { confirmEmailOtp: 1 },
       },
     });
-    return res.json({ message: "Done" });
+    return successResponse({ res });
   };
 
   login = async (req: Request, res: Response): Promise<Response> => {
@@ -180,10 +185,7 @@ class AuthenticationService {
     }
     const credentials = await createLoginCredentials(user);
 
-    return res.json({
-      message: "Done",
-      data: { credentials },
-    });
+    return successResponse<ILoginResponse>({ res, data: { credentials } });
   };
 
   sendForgotPasswordCode = async (
@@ -218,9 +220,7 @@ class AuthenticationService {
     }
 
     emailEvent.emit("resetPassword", { to: email, otp });
-    return res.json({
-      message: "Done",
-    });
+    return successResponse({ res });
   };
 
   verifyForgotPassword = async (
@@ -244,9 +244,7 @@ class AuthenticationService {
     if (!(await compareHash(otp, user.resetPasswordOtp as string))) {
       throw new ConflictException("invalid otp");
     }
-    return res.json({
-      message: "Done",
-    });
+    return successResponse({ res });
   };
 
   resetForgotPassword = async (
@@ -282,9 +280,7 @@ class AuthenticationService {
     if (!result.matchedCount) {
       throw new BadRequestException("Fail to reset account password");
     }
-    return res.json({
-      message: "Done",
-    });
+    return successResponse({ res });
   };
 }
 
