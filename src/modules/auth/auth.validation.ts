@@ -20,7 +20,7 @@ export const signup = {
       if (data.confirmPassword !== data.password) {
         ctx.addIssue({
           code: "custom",
-          path: ["confirmEmail"],
+          path: ["confirmPassword"],
           message: "Password mismatch confirmPassword",
         });
       }
@@ -68,4 +68,31 @@ export const resetForgotPassword = {
         path: ["confirmPassword"],
       }
     ),
+};
+
+export const updatePassword = {
+  body: z
+    .object({
+      oldPassword: generalFields.password,
+      newPassword: generalFields.password,
+      confirmPassword: generalFields.confirmPassword,
+    })
+    .refine((data) => data.newPassword === data.confirmPassword, {
+      message: "Password mismatch confirm-password",
+      path: ["confirmPassword"],
+    }),
+};
+
+export const updateInfo = {
+  body: z.object({
+    userName: generalFields.userName.optional(),
+    phone: generalFields.phone.optional(),
+    bio: generalFields.bio.optional(),
+  }),
+};
+
+export const enableTwoStepSchema = {
+  body: z.object({
+    twoStepEnabled: generalFields.twoStepEnabled,
+  }),
 };

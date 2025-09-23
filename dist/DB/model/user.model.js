@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserModel = exports.ProviderEnum = exports.RoleEnum = exports.GenderEnum = void 0;
 const mongoose_1 = require("mongoose");
+const hash_security_1 = require("../../utils/security/hash.security");
+const email_event_1 = require("../../utils/email/email.event");
 var GenderEnum;
 (function (GenderEnum) {
     GenderEnum["male"] = "male";
@@ -42,6 +44,10 @@ const userSchema = new mongoose_1.Schema({
     freezedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
     restoredAt: Date,
     restoredBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
+    friends: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
+    twoStepEnabled: { type: Boolean, default: false },
+    twoStepSecret: { type: String },
+    twoStepVerifiedAt: { type: Date },
     provider: {
         type: String,
         enum: ProviderEnum,
@@ -62,5 +68,36 @@ userSchema
 })
     .get(function () {
     return this.firstName + " " + this.lastName;
+});
+userSchema.pre("save", async function (next) {
+    this.wasNew = this.isNew;
+    if (this.isModified("password")) {
+        this.password = await (0, hash_security_1.generateHash)(this.password);
+    }
+    if (this.isModified("confirmEmailOtp")) {
+        this.confirmEmailPlainOtp = this.confirmEmailOtp;
+        this.confirmEmailOtp = await (0, hash_security_1.generateHash)(this.confirmEmailOtp);
+    }
+    next();
+});
+userSchema.post("save", async function (doc, next) {
+    const that = this;
+    if (that.wasNew && that.confirmEmailPlainOtp) {
+        email_event_1.emailEvent.emit("confirmEmail", {
+            to: this.email,
+            otp: that.confirmEmailPlainOtp,
+        });
+    }
+    next();
+});
+userSchema.pre(["find", "findOne"], function (next) {
+    const query = this.getQuery();
+    if (query.paranoid === false) {
+        this.setQuery({ ...query });
+    }
+    else {
+        this.setQuery({ ...query, freezedAt: { $exists: false } });
+    }
+    next();
 });
 exports.UserModel = mongoose_1.models.User || (0, mongoose_1.model)("User", userSchema);

@@ -22,3 +22,8 @@ export type IResetForgotCodeDTto = z.infer<
   typeof validators.resetForgotPassword.body
 >;
 export type IGmailDTto = z.infer<typeof validators.signupWithGmail.body>;
+
+export type IUpdatePasswordDto = z.infer<typeof validators.updatePassword.body>;
+export type IUpdateInfoDto = z.infer<typeof validators.updateInfo.body>;
+
+export type EnableTwoStepDto = z.infer<typeof validators.enableTwoStepSchema>;

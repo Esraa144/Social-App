@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const user_model_1 = require("../../DB/model/user.model");
-const user_repository_1 = require("../../DB/repository/user.repository ");
 const error_response_1 = require("../../utils/response/error.response");
 const hash_security_1 = require("../../utils/security/hash.security");
 const email_event_1 = require("../../utils/email/email.event");
@@ -9,8 +8,12 @@ const otp_1 = require("../../utils/otp");
 const token_security_1 = require("../../utils/security/token.security");
 const google_auth_library_1 = require("google-auth-library");
 const success_response_1 = require("../../utils/response/success.response");
+const repository_1 = require("../../DB/repository");
+const mongoose_1 = require("mongoose");
+const nanoid_1 = require("nanoid");
+const nanoid = (0, nanoid_1.customAlphabet)("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", 32);
 class AuthenticationService {
-    userModel = new user_repository_1.UserRepository(user_model_1.UserModel);
+    userModel = new repository_1.UserRepository(user_model_1.UserModel);
     constructor() { }
     async verifyGmailAccount(idToken) {
         const client = new google_auth_library_1.OAuth2Client();
@@ -79,11 +82,9 @@ class AuthenticationService {
         let { userName, email, password } = req.body;
         console.log({ userName, email, password });
         const checkUserExist = await this.userModel.findOne({
-            filter: {},
+            filter: { email },
             select: "email",
-            options: {
-                lean: true,
-            },
+            options: { lean: true },
         });
         if (checkUserExist) {
             throw new error_response_1.ConflictException("Email Exist");
@@ -94,14 +95,11 @@ class AuthenticationService {
                 {
                     userName,
                     email,
-                    password: await (0, hash_security_1.generateHash)(password),
-                    confirmEmailOtp: await (0, hash_security_1.generateHash)(String(otp)),
+                    password,
+                    confirmEmailOtp: `${otp}`,
                 },
             ],
-        });
-        email_event_1.emailEvent.emit("ConfirmEmail", {
-            to: email,
-            otp: otp,
+            options: { validateBeforeSave: true },
         });
         return (0, success_response_1.successResponse)({ res, statusCode: 201 });
     };
@@ -215,6 +213,93 @@ class AuthenticationService {
             throw new error_response_1.BadRequestException("Fail to reset account password");
         }
         return (0, success_response_1.successResponse)({ res });
+    };
+    updatePassword = async (req, res) => {
+        const { oldPassword, newPassword, confirmPassword } = req.body;
+        const userId = req.user?._id;
+        const user = await this.userModel.findById({ id: userId });
+        if (!user) {
+            throw new error_response_1.NotFoundException("In-valid Account: user not found");
+        }
+        if (!(await (0, hash_security_1.compareHash)(oldPassword, user.password))) {
+            throw new error_response_1.ConflictException("Old password is incorrect");
+        }
+        if (newPassword !== confirmPassword) {
+            throw new error_response_1.BadRequestException("Password mismatch confirm-password");
+        }
+        const result = await this.userModel.findByIdAndUpdate({
+            id: userId,
+            update: {
+                password: await (0, hash_security_1.generateHash)(newPassword),
+                changeCredentialsTime: new Date(),
+            },
+        });
+        if (!result) {
+            throw new error_response_1.BadRequestException("Fail to update account password");
+        }
+        return (0, success_response_1.successResponse)({ res, message: "Password updated successfully" });
+    };
+    updateInfo = async (req, res) => {
+        const { userName, phone, bio } = req.body;
+        if (!req.user?._id) {
+            throw new error_response_1.BadRequestException("User ID is missing");
+        }
+        const userId = new mongoose_1.Types.ObjectId(req.user._id);
+        const user = await this.userModel.findById({ id: userId });
+        if (!user) {
+            throw new error_response_1.NotFoundException("In-valid Account: user not found");
+        }
+        const result = await this.userModel.findByIdAndUpdate({
+            id: userId,
+            update: {
+                ...(userName && { userName }),
+                ...(phone && { phone }),
+                ...(bio && { bio }),
+                changeCredentialsTime: new Date(),
+            },
+        });
+        if (!result) {
+            throw new error_response_1.BadRequestException("Fail to update user info");
+        }
+        return (0, success_response_1.successResponse)({ res, message: "User info updated successfully" });
+    };
+    enableTwoStep = async (req, res) => {
+        const userId = new mongoose_1.Types.ObjectId(req.user?._id);
+        const user = await this.userModel.findById({ id: userId });
+        if (!user) {
+            throw new error_response_1.NotFoundException("Invalid Account: user not found");
+        }
+        const { twoStepEnabled } = req.body;
+        if (twoStepEnabled) {
+            const secret = nanoid(32);
+            await this.userModel.findByIdAndUpdate({
+                id: userId,
+                update: {
+                    twoStepEnabled: true,
+                    twoStepSecret: secret,
+                    twoStepVerifiedAt: new Date(),
+                },
+            });
+            return (0, success_response_1.successResponse)({
+                res,
+                message: "Two-Step Verification enabled successfully",
+                data: { secret },
+            });
+        }
+        else {
+            await this.userModel.findByIdAndUpdate({
+                id: userId,
+                update: {
+                    twoStepEnabled: false,
+                    twoStepSecret: "",
+                    twoStepVerifiedAt: null,
+                },
+            });
+            return (0, success_response_1.successResponse)({
+                res,
+                message: "Two-Step Verification disabled successfully",
+            });
+        }
     };
 }
 exports.default = new AuthenticationService();

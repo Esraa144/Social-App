@@ -49,4 +49,7 @@ router.post("/login", (0, validation_middleware_1.validation)(validators.login),
 router.patch("/send-forgot-password", (0, validation_middleware_1.validation)(validators.sendForgotPasswordCode), auth_service_1.default.sendForgotPasswordCode);
 router.patch("/verify-forgot-password", (0, validation_middleware_1.validation)(validators.verifyForgotPassword), auth_service_1.default.sendForgotPasswordCode);
 router.patch("/reset-forgot-password", (0, validation_middleware_1.validation)(validators.resetForgotPassword), auth_service_1.default.resetForgotPassword);
+router.patch("/update-password", (0, validation_middleware_1.validation)(validators.updatePassword), auth_service_1.default.updatePassword);
+router.patch("/update-info", (0, validation_middleware_1.validation)(validators.updateInfo), auth_service_1.default.updateInfo);
+router.patch("/two-step", (0, validation_middleware_1.validation)(validators.enableTwoStepSchema), auth_service_1.default.enableTwoStep);
 exports.default = router;

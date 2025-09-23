@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetForgotPassword = exports.verifyForgotPassword = exports.sendForgotPasswordCode = exports.signupWithGmail = exports.confirmEmail = exports.signup = exports.login = void 0;
+exports.enableTwoStepSchema = exports.updateInfo = exports.updatePassword = exports.resetForgotPassword = exports.verifyForgotPassword = exports.sendForgotPasswordCode = exports.signupWithGmail = exports.confirmEmail = exports.signup = exports.login = void 0;
 const zod_1 = require("zod");
 const validation_middleware_1 = require("../../middleware/validation.middleware");
 exports.login = {
@@ -20,7 +20,7 @@ exports.signup = {
         if (data.confirmPassword !== data.password) {
             ctx.addIssue({
                 code: "custom",
-                path: ["confirmEmail"],
+                path: ["confirmPassword"],
                 message: "Password mismatch confirmPassword",
             });
         }
@@ -59,5 +59,29 @@ exports.resetForgotPassword = {
     }, {
         message: "Password mismatch confirm-password",
         path: ["confirmPassword"],
+    }),
+};
+exports.updatePassword = {
+    body: zod_1.z
+        .object({
+        oldPassword: validation_middleware_1.generalFields.password,
+        newPassword: validation_middleware_1.generalFields.password,
+        confirmPassword: validation_middleware_1.generalFields.confirmPassword,
+    })
+        .refine((data) => data.newPassword === data.confirmPassword, {
+        message: "Password mismatch confirm-password",
+        path: ["confirmPassword"],
+    }),
+};
+exports.updateInfo = {
+    body: zod_1.z.object({
+        userName: validation_middleware_1.generalFields.userName.optional(),
+        phone: validation_middleware_1.generalFields.phone.optional(),
+        bio: validation_middleware_1.generalFields.bio.optional(),
+    }),
+};
+exports.enableTwoStepSchema = {
+    body: zod_1.z.object({
+        twoStepEnabled: validation_middleware_1.generalFields.twoStepEnabled,
     }),
 };

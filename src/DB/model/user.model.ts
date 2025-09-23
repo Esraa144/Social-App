@@ -1,4 +1,6 @@
 import { model, models, Schema, HydratedDocument, Types } from "mongoose";
+import { generateHash } from "../../utils/security/hash.security";
+import { emailEvent } from "../../utils/email/email.event";
 
 export enum GenderEnum {
   male = "male",
@@ -43,6 +45,11 @@ export interface IUser {
   freezedBy?: Types.ObjectId;
   restoredAt?: Date;
   restoredBy?: Types.ObjectId;
+  friends?: Types.ObjectId[];
+
+  twoStepEnabled?: boolean;
+  twoStepSecret?: string;
+  twoStepVerifiedAt?: Date;
 
   createdAt: Date;
   updatedAt?: Date;
@@ -79,6 +86,11 @@ const userSchema = new Schema<IUser>(
     freezedBy: { type: Schema.Types.ObjectId, ref: "User" },
     restoredAt: Date,
     restoredBy: { type: Schema.Types.ObjectId, ref: "User" },
+    friends: [{ type: Schema.Types.ObjectId, ref: "User" }],
+
+    twoStepEnabled: { type: Boolean, default: false },
+    twoStepSecret: { type: String },
+    twoStepVerifiedAt: { type: Date },
 
     provider: {
       type: String,
@@ -105,6 +117,46 @@ userSchema
   .get(function () {
     return this.firstName + " " + this.lastName;
   });
+userSchema.pre(
+  "save",
+  async function (
+    this: HUserDocument & { wasNew: boolean; confirmEmailPlainOtp?: string },
+    next
+  ) {
+    this.wasNew = this.isNew;
+    if (this.isModified("password")) {
+      this.password = await generateHash(this.password);
+    }
 
+    if (this.isModified("confirmEmailOtp")) {
+      this.confirmEmailPlainOtp = this.confirmEmailOtp as string;
+      this.confirmEmailOtp = await generateHash(this.confirmEmailOtp as string);
+    }
+    next();
+  }
+);
+userSchema.post("save", async function (doc, next) {
+  const that = this as HUserDocument & {
+    wasNew: boolean;
+    confirmEmailPlainOtp?: string;
+  };
+  if (that.wasNew && that.confirmEmailPlainOtp) {
+    emailEvent.emit("confirmEmail", {
+      to: this.email,
+      otp: that.confirmEmailPlainOtp,
+    });
+  }
+  next();
+});
+
+userSchema.pre(["find", "findOne"], function (next) {
+  const query = this.getQuery();
+  if (query.paranoid === false) {
+    this.setQuery({ ...query });
+  } else {
+    this.setQuery({ ...query, freezedAt: { $exists: false } });
+  }
+  next();
+});
 export const UserModel = models.User || model<IUser>("User", userSchema);
 export type HUserDocument = HydratedDocument<IUser>;

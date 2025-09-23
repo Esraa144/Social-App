@@ -41,4 +41,23 @@ router.patch(
   validation(validators.resetForgotPassword),
   authService.resetForgotPassword
 );
+
+router.patch(
+  "/update-password",
+  validation(validators.updatePassword),
+  authService.updatePassword
+);
+
+router.patch(
+  "/update-info",
+  validation(validators.updateInfo),
+  authService.updateInfo
+);
+
+router.patch(
+  "/two-step",
+  validation(validators.enableTwoStepSchema),
+  authService.enableTwoStep
+);
+
 export default router;

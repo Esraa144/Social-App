@@ -6,8 +6,7 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from "../response/error.response";
-import { UserRepository } from "../../DB/repository/user.repository ";
-import { TokenRepository } from "../../DB/repository/token.repository";
+import { UserRepository, TokenRepository } from "../../DB/repository";
 import { HTokenDocument, TokenModel } from "../../DB/model/token.model";
 
 export enum SignatureLevelEnum {
@@ -123,7 +122,7 @@ export const decodeToken = async ({
   const tokenModel = new TokenRepository(TokenModel);
   const [bearerKey, token] = authorization.split(" ");
   if (!bearerKey || !token) {
-    throw new UnauthorizedException("Missing Token Partes");
+    throw new UnauthorizedException("Missing Token Parts");
   }
 
   const signatures = await getSignatures(bearerKey as SignatureLevelEnum);

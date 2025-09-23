@@ -7,7 +7,7 @@ export class UserRepository extends DatabaseRepository<TDocument> {
   constructor(protected override readonly model: Model<TDocument>) {
     super(model);
   }
-  
+
   async createUser({
     data,
     options,

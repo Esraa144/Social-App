@@ -10,8 +10,7 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = require("express-rate-limit");
-const auth_controller_1 = __importDefault(require("./modules/auth/auth.controller"));
-const user_controller_1 = __importDefault(require("./modules/user/user.controller"));
+const modules_1 = require("./modules");
 const error_response_1 = require("./utils/response/error.response");
 const connection_db_1 = __importDefault(require("./DB/connection.db"));
 const s3_config_1 = require("./utils/multer/s3.config");
@@ -31,8 +30,9 @@ const bootstrap = async () => {
     app.get("/", (req, res) => {
         res.json({ message: "Welcome To Social App Backend Landing Page❤❤ " });
     });
-    app.use("/auth", auth_controller_1.default);
-    app.use("/user", user_controller_1.default);
+    app.use("/auth", modules_1.authRouter);
+    app.use("/user", modules_1.userRouter);
+    app.use("/post", modules_1.postRouter);
     app.get("/upload/*path", async (req, res) => {
         const { downloadName, download = "false" } = req.query;
         const { path } = req.params;

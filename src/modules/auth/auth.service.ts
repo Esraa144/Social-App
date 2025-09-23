@@ -6,10 +6,11 @@ import type {
   ILoginBodyInputsDTto,
   IResetForgotCodeDTto,
   ISignupBodyInputsDTto,
+  IUpdateInfoDto,
+  IUpdatePasswordDto,
   IVerifyForgotCodeDTto,
 } from "./auth.dto";
 import { ProviderEnum, UserModel } from "../../DB/model/user.model";
-import { UserRepository } from "../../DB/repository/user.repository ";
 import {
   BadRequestException,
   ConflictException,
@@ -22,6 +23,14 @@ import { createLoginCredentials } from "../../utils/security/token.security";
 import { OAuth2Client, TokenPayload } from "google-auth-library";
 import { successResponse } from "../../utils/response/success.response";
 import { ILoginResponse } from "./auth.entities";
+import { UserRepository } from "../../DB/repository";
+import { Types } from "mongoose";
+import { customAlphabet } from "nanoid";
+
+const nanoid = customAlphabet(
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+  32
+);
 
 class AuthenticationService {
   private userModel = new UserRepository(UserModel);
@@ -115,12 +124,11 @@ class AuthenticationService {
   signup = async (req: Request, res: Response): Promise<Response> => {
     let { userName, email, password }: ISignupBodyInputsDTto = req.body;
     console.log({ userName, email, password });
+
     const checkUserExist = await this.userModel.findOne({
-      filter: {},
+      filter: { email },
       select: "email",
-      options: {
-        lean: true,
-      },
+      options: { lean: true },
     });
     if (checkUserExist) {
       throw new ConflictException("Email Exist");
@@ -132,15 +140,13 @@ class AuthenticationService {
         {
           userName,
           email,
-          password: await generateHash(password),
-          confirmEmailOtp: await generateHash(String(otp)),
+          password,
+          confirmEmailOtp: `${otp}`,
         },
       ],
+      options: { validateBeforeSave: true },
     });
-    emailEvent.emit("ConfirmEmail", {
-      to: email,
-      otp: otp,
-    });
+
     return successResponse({ res, statusCode: 201 });
   };
 
@@ -281,6 +287,113 @@ class AuthenticationService {
       throw new BadRequestException("Fail to reset account password");
     }
     return successResponse({ res });
+  };
+
+  updatePassword = async (req: Request, res: Response): Promise<Response> => {
+    const { oldPassword, newPassword, confirmPassword }: IUpdatePasswordDto =
+      req.body;
+    const userId = req.user?._id as Types.ObjectId;
+
+    const user = await this.userModel.findById({ id: userId });
+    if (!user) {
+      throw new NotFoundException("In-valid Account: user not found");
+    }
+
+    if (!(await compareHash(oldPassword, user.password))) {
+      throw new ConflictException("Old password is incorrect");
+    }
+
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException("Password mismatch confirm-password");
+    }
+
+    const result = await this.userModel.findByIdAndUpdate({
+      id: userId,
+      update: {
+        password: await generateHash(newPassword),
+        changeCredentialsTime: new Date(),
+      },
+    });
+
+    if (!result) {
+      throw new BadRequestException("Fail to update account password");
+    }
+
+    return successResponse({ res, message: "Password updated successfully" });
+  };
+
+  updateInfo = async (req: Request, res: Response): Promise<Response> => {
+    const { userName, phone, bio }: IUpdateInfoDto = req.body;
+
+    if (!req.user?._id) {
+      throw new BadRequestException("User ID is missing");
+    }
+    const userId = new Types.ObjectId(req.user._id);
+
+    const user = await this.userModel.findById({ id: userId });
+    if (!user) {
+      throw new NotFoundException("In-valid Account: user not found");
+    }
+
+    const result = await this.userModel.findByIdAndUpdate({
+      id: userId,
+      update: {
+        ...(userName && { userName }),
+        ...(phone && { phone }),
+        ...(bio && { bio }),
+        changeCredentialsTime: new Date(),
+      },
+    });
+
+    if (!result) {
+      throw new BadRequestException("Fail to update user info");
+    }
+
+    return successResponse({ res, message: "User info updated successfully" });
+  };
+
+  enableTwoStep = async (req: Request, res: Response): Promise<Response> => {
+    const userId = new Types.ObjectId(req.user?._id);
+
+    const user = await this.userModel.findById({ id: userId });
+    if (!user) {
+      throw new NotFoundException("Invalid Account: user not found");
+    }
+
+    const { twoStepEnabled }: { twoStepEnabled: boolean } = req.body;
+
+    if (twoStepEnabled) {
+      const secret = nanoid(32);
+
+      await this.userModel.findByIdAndUpdate({
+        id: userId,
+        update: {
+          twoStepEnabled: true,
+          twoStepSecret: secret,
+          twoStepVerifiedAt: new Date(),
+        },
+      });
+
+      return successResponse({
+        res,
+        message: "Two-Step Verification enabled successfully",
+        data: { secret },
+      });
+    } else {
+      await this.userModel.findByIdAndUpdate({
+        id: userId,
+        update: {
+          twoStepEnabled: false,
+          twoStepSecret: "",
+          twoStepVerifiedAt: null,
+        },
+      });
+
+      return successResponse({
+        res,
+        message: "Two-Step Verification disabled successfully",
+      });
+    }
   };
 }
 

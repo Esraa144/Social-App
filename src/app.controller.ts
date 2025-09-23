@@ -13,8 +13,8 @@ import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 
 //MODULE ROUTING
-import authController from "./modules/auth/auth.controller";
-import userController from "./modules/user/user.controller";
+import { authRouter, postRouter, userRouter } from "./modules";
+
 import {
   BadRequestException,
   globalErrorHandling,
@@ -52,9 +52,9 @@ const bootstrap = async (): Promise<void> => {
     res.json({ message: "Welcome To Social App Backend Landing Page❤❤ " });
   });
   //sub-app-routing-modules
-  app.use("/auth", authController);
-  app.use("/user", userController);
-
+  app.use("/auth", authRouter);
+  app.use("/user", userRouter);
+  app.use("/post", postRouter);
   //get assets
   app.get(
     "/upload/*path",

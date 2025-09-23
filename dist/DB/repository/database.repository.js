@@ -6,7 +6,24 @@ class DatabaseRepository {
     constructor(model) {
         this.model = model;
     }
+    async find({ filter, select, options, }) {
+        const doc = this.model.find(filter || {}).select(select || "");
+        if (options?.populate) {
+            doc.populate(options.populate);
+        }
+        if (options?.skip) {
+            doc.skip(options.skip);
+        }
+        if (options?.limit) {
+            doc.limit(options.limit);
+        }
+        if (options?.lean) {
+            doc.lean(options.lean);
+        }
+        return await doc.exec();
+    }
     async findOne({ filter, select, options, }) {
+        console.log(">> Repository findOne filter:", filter);
         const doc = this.model.findOne(filter).select(select || "");
         if (options?.populate) {
             doc.populate(options.populate);
@@ -25,8 +42,17 @@ class DatabaseRepository {
     async deleteOne({ filter, }) {
         return this.model.deleteOne(filter);
     }
-    async findByIdAndUpdate({ id, update, options = { new: true }, }) {
-        return await this.model.findByIdAndUpdate(id, { ...update, $inc: { __v: 1 } }, options);
+    async findById({ id, options = {}, }) {
+        return this.model.findById(id, null, options);
+    }
+    async findByIdAndUpdate({ id, update, options = {}, }) {
+        return this.model.findByIdAndUpdate(id, update, { new: true, ...options });
+    }
+    async findOneAndUpdate({ filter, update, options = {}, }) {
+        return this.model.findOneAndUpdate(filter, update, {
+            new: true,
+            ...options,
+        });
     }
 }
 exports.DatabaseRepository = DatabaseRepository;

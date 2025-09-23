@@ -1,4 +1,4 @@
-import { DeleteResult, Types } from "mongoose";
+import { DeleteResult, FilterQuery, Types } from "mongoose";
 import {
   CreateOptions,
   FlattenMaps,
@@ -17,6 +17,32 @@ export type Lean<T> = HydratedDocument<FlattenMaps<T>>;
 export abstract class DatabaseRepository<TDocument> {
   constructor(protected readonly model: Model<TDocument>) {}
 
+  async find({
+    filter,
+    select,
+    options,
+  }: {
+    filter?: RootFilterQuery<TDocument>;
+    select?: ProjectionType<TDocument> | null;
+    options?: QueryOptions<TDocument> | null;
+  }): Promise<HydratedDocument<TDocument>[] | [] | Lean<TDocument>[]> {
+    const doc = this.model.find(filter || {}).select(select || "");
+
+    if (options?.populate) {
+      doc.populate(options.populate as PopulateOptions[]);
+    }
+    if (options?.skip) {
+      doc.skip(options.skip);
+    }
+    if (options?.limit) {
+      doc.limit(options.limit);
+    }
+    if (options?.lean) {
+      doc.lean(options.lean);
+    }
+    return await doc.exec();
+  }
+
   async findOne({
     filter,
     select,
@@ -28,6 +54,7 @@ export abstract class DatabaseRepository<TDocument> {
   }): Promise<
     Lean<TDocument> | HydratedDocument<TDocument> | null | Lean<TDocument>
   > {
+    console.log(">> Repository findOne filter:", filter);
     const doc = this.model.findOne(filter).select(select || "");
 
     if (options?.populate) {
@@ -73,19 +100,40 @@ export abstract class DatabaseRepository<TDocument> {
     return this.model.deleteOne(filter);
   }
 
+  async findById({
+    id,
+    options = {},
+  }: {
+    id: Types.ObjectId;
+    options?: QueryOptions<TDocument> | null;
+  }): Promise<HydratedDocument<TDocument> | Lean<TDocument> | null> {
+    return this.model.findById(id, null, options);
+  }
+
   async findByIdAndUpdate({
     id,
     update,
-    options = { new: true },
+    options = {},
   }: {
     id: Types.ObjectId;
-    update?: UpdateQuery<TDocument>;
+    update: UpdateQuery<TDocument>;
     options?: QueryOptions<TDocument> | null;
   }): Promise<HydratedDocument<TDocument> | Lean<TDocument> | null> {
-    return await this.model.findByIdAndUpdate(
-      id,
-      { ...update, $inc: { __v: 1 } },
-      options
-    );
+    return this.model.findByIdAndUpdate(id, update, { new: true, ...options });
+  }
+
+  async findOneAndUpdate({
+    filter,
+    update,
+    options = {},
+  }: {
+    filter: FilterQuery<TDocument>;
+    update: UpdateQuery<TDocument>;
+    options?: QueryOptions<TDocument> | null;
+  }): Promise<HydratedDocument<TDocument> | Lean<TDocument> | null> {
+    return this.model.findOneAndUpdate(filter, update, {
+      new: true,
+      ...options,
+    });
   }
 }
