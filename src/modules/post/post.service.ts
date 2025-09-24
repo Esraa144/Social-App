@@ -17,6 +17,21 @@ import { deleteFiles, uploadFiles } from "../../utils/multer/s3.config";
 import { LikePostQueryInputDto } from "./post.dto";
 import { UpdateQuery } from "mongoose";
 
+export const postAvailability = (req: Request) => {
+  return [
+    { availability: AvailabilityEnum.public },
+    { availability: AvailabilityEnum.onlyMe, createdBy: req.user?._id },
+    {
+      availability: AvailabilityEnum.friends,
+      createdBy: { $in: [...(req.user?.friends || []), req.user?._id] },
+    },
+    {
+      availability: { $ne: AvailabilityEnum.onlyMe },
+      tags: { $in: req.user?._id },
+    },
+  ];
+};
+
 class PostService {
   private userModel = new UserRepository(UserModel);
   private postModel = new PostRepository(PostModel);
@@ -72,14 +87,7 @@ class PostService {
     const post = await this.postModel.findOneAndUpdate({
       filter: {
         _id: postId,
-        $or: [
-          { availability: AvailabilityEnum.public },
-          { availability: AvailabilityEnum.onlyMe, createdBy: req.user?._id },
-          {
-            availability: AvailabilityEnum.friends,
-            createdBy: { $in: [...(req.user?.friends || []), req.user?._id] },
-          },
-        ],
+        $or: postAvailability(req),
       },
       update,
     });
@@ -90,4 +98,4 @@ class PostService {
   };
 }
 
-export default new PostService();
+export const postService = new PostService();

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import postService from "./post.service";
+import { postService } from "./post.service";
 import { authentication } from "../../middleware/authentication.middleware";
 import {
   cloudFileUpload,

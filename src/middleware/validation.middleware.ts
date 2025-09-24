@@ -1,48 +1,38 @@
-import { z } from "zod";
-import type { NextFunction, Request, Response } from "express";
-import type { ZodError, ZodType } from "zod";
+import { NextFunction, Request, Response } from "express";
+import z, { ZodType } from "zod";
 import { BadRequestException } from "../utils/response/error.response";
 import { Types } from "mongoose";
 
-type KeyReqType = keyof Request;
-type SchemaType = Partial<Record<KeyReqType, ZodType>>;
-type validationErrorsType = Array<{
-  key: KeyReqType;
-  issues: Array<{
+type RequestKeyType = keyof Request;
+type SchemaType = Partial<Record<RequestKeyType, ZodType>>;
+type ValidationErrorsType = {
+  key: RequestKeyType;
+  issues: {
+    path: PropertyKey[];
     message: string;
-    path: (string | number | symbol | undefined)[];
-  }>;
-}>;
+  }[];
+};
 export const validation = (schema: SchemaType) => {
-  return (req: Request, res: Response, next: NextFunction): NextFunction => {
-    const validationErrors: validationErrorsType = [];
-
-    for (const key of Object.keys(schema) as KeyReqType[]) {
-      if (!schema[key]) continue;
-      if (!schema.file) {
-        req.body.attachment = req.file;
-      }
-
-      if (!schema.files) {
-        req.body.attachments = req.files;
-      }
-      const validationResult = schema[key].safeParse(req[key]);
-      if (!validationResult.success) {
-        const errors = validationResult.error as ZodError;
-        validationErrors.push({
-          key,
-          issues: errors.issues.map((issue) => {
-            return { message: issue.message, path: issue.path };
-          }),
-        });
+  return (req: Request, res: Response, next: NextFunction) => {
+    const reqKey: RequestKeyType[] = ["body", "params", "query", "headers"];
+    const validationErrors: ValidationErrorsType[] = [];
+    for (const key of reqKey) {
+      if (schema[key]) {
+        const result = schema[key].safeParse(req[key]);
+        // console.log(result);
+        if (!result.success) {
+          const issues = result.error?.issues?.map((issue) => ({
+            path: issue.path,
+            message: issue.message,
+          }));
+          validationErrors.push({ key, issues });
+        }
       }
     }
     if (validationErrors.length) {
-      throw new BadRequestException("Validation Errors", {
-        validationErrors,
-      });
+      throw new BadRequestException("Validation failed", { validationErrors });
     }
-    return next() as unknown as NextFunction;
+    next();
   };
 };
 

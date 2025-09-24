@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.postService = exports.postAvailability = void 0;
 const success_response_1 = require("../../utils/response/success.response");
 const repository_1 = require("../../DB/repository");
 const user_model_1 = require("../../DB/model/user.model");
@@ -7,6 +8,21 @@ const post_model_1 = require("../../DB/model/post.model");
 const error_response_1 = require("../../utils/response/error.response");
 const uuid_1 = require("uuid");
 const s3_config_1 = require("../../utils/multer/s3.config");
+const postAvailability = (req) => {
+    return [
+        { availability: post_model_1.AvailabilityEnum.public },
+        { availability: post_model_1.AvailabilityEnum.onlyMe, createdBy: req.user?._id },
+        {
+            availability: post_model_1.AvailabilityEnum.friends,
+            createdBy: { $in: [...(req.user?.friends || []), req.user?._id] },
+        },
+        {
+            availability: { $ne: post_model_1.AvailabilityEnum.onlyMe },
+            tags: { $in: req.user?._id },
+        },
+    ];
+};
+exports.postAvailability = postAvailability;
 class PostService {
     userModel = new repository_1.UserRepository(user_model_1.UserModel);
     postModel = new repository_1.PostRepository(post_model_1.PostModel);
@@ -55,14 +71,7 @@ class PostService {
         const post = await this.postModel.findOneAndUpdate({
             filter: {
                 _id: postId,
-                $or: [
-                    { availability: post_model_1.AvailabilityEnum.public },
-                    { availability: post_model_1.AvailabilityEnum.onlyMe, createdBy: req.user?._id },
-                    {
-                        availability: post_model_1.AvailabilityEnum.friends,
-                        createdBy: { $in: [...(req.user?.friends || []), req.user?._id] },
-                    },
-                ],
+                $or: (0, exports.postAvailability)(req),
             },
             update,
         });
@@ -72,4 +81,4 @@ class PostService {
         return (0, success_response_1.successResponse)({ res });
     };
 }
-exports.default = new PostService();
+exports.postService = new PostService();

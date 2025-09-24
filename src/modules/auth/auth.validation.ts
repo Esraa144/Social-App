@@ -15,8 +15,6 @@ export const signup = {
       confirmPassword: generalFields.confirmPassword,
     })
     .superRefine((data, ctx) => {
-      console.log({ data, ctx });
-
       if (data.confirmPassword !== data.password) {
         ctx.addIssue({
           code: "custom",
