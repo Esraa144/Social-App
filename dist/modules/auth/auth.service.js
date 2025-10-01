@@ -79,29 +79,39 @@ class AuthenticationService {
         return (0, success_response_1.successResponse)({ res, data: { credentials } });
     };
     signup = async (req, res) => {
-        let { userName, email, password } = req.body;
-        console.log({ userName, email, password });
-        const checkUserExist = await this.userModel.findOne({
-            filter: { email },
-            select: "email",
-            options: { lean: true },
-        });
-        if (checkUserExist) {
-            throw new error_response_1.ConflictException("Email Exist");
+        try {
+            const { userName, email, password } = req.body;
+            console.log({ userName, email, password });
+            const checkUserExist = await this.userModel.findOne({
+                filter: { email },
+                select: "email",
+                options: { lean: true },
+            });
+            if (checkUserExist) {
+                throw new error_response_1.ConflictException("Email Exist");
+            }
+            const otp = (0, otp_1.generateNumberOtp)();
+            console.log("Generated OTP:", otp);
+            await this.userModel.createUser({
+                data: [
+                    {
+                        userName,
+                        email,
+                        password,
+                        confirmEmailOtp: `${otp}`,
+                    },
+                ],
+                options: { validateBeforeSave: true },
+            });
+            console.log("User created in DB");
+            email_event_1.emailEvent.emit("ConfirmEmail", { to: email, otp: String(otp) });
+            console.log("Email Event Emitted");
+            return (0, success_response_1.successResponse)({ res, statusCode: 201 });
         }
-        const otp = (0, otp_1.generateNumberOtp)();
-        await this.userModel.createUser({
-            data: [
-                {
-                    userName,
-                    email,
-                    password,
-                    confirmEmailOtp: `${otp}`,
-                },
-            ],
-            options: { validateBeforeSave: true },
-        });
-        return (0, success_response_1.successResponse)({ res, statusCode: 201 });
+        catch (err) {
+            console.error(">>> Signup Error:", err.message, err.stack);
+            throw err;
+        }
     };
     confirmEmail = async (req, res) => {
         const { email, otp } = req.body;

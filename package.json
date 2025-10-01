@@ -4,7 +4,9 @@
   "main": "dist/index.js",
   "type": "commonjs",
   "scripts": {
-    "start:dev": "concurrently \"tsc --watch\" \"nodemon --watch dist/index.js\""
+    "start": "node dist/index.js",
+    "start:dev": "concurrently \"tsc --watch\" \"nodemon --watch dist/index.js\"",
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",

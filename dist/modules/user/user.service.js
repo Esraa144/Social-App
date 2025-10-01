@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const mongoose_1 = require("mongoose");
 const user_model_1 = require("../../DB/model/user.model");
 const token_security_1 = require("../../utils/security/token.security");
 const user_repository_1 = require("../../DB/repository/user.repository ");
@@ -8,8 +9,12 @@ const cloud_multer_1 = require("../../utils/multer/cloud.multer");
 const error_response_1 = require("../../utils/response/error.response");
 const s3_events_1 = require("../../utils/multer/s3.events");
 const success_response_1 = require("../../utils/response/success.response");
+const repository_1 = require("../../DB/repository");
+const model_1 = require("../../DB/model");
 class UserService {
     userModel = new user_repository_1.UserRepository(user_model_1.UserModel);
+    postModel = new repository_1.PostRepository(model_1.PostModel);
+    friendRequestModel = new repository_1.FriendRequestRepository(model_1.FriendRequestModel);
     constructor() { }
     profileImage = async (req, res) => {
         const { ContentType, originalname, } = req.body;
@@ -58,10 +63,105 @@ class UserService {
         return (0, success_response_1.successResponse)({ res, data: { user } });
     };
     profile = async (req, res) => {
-        if (!req.user) {
-            throw new error_response_1.UnauthorizedException("missing user details");
+        const profile = await this.userModel.findById({ id: req.user?._id, options: {
+                populate: [
+                    {
+                        path: "friends",
+                        select: "firstName lastName email gender profilePicture"
+                    }
+                ]
+            } });
+        if (!profile) {
+            throw new error_response_1.NotFoundException("fail to find user profile");
         }
-        return (0, success_response_1.successResponse)({ res, data: { user: req.user } });
+        return (0, success_response_1.successResponse)({ res, data: { user: profile } });
+    };
+    dashboard = async (req, res) => {
+        const result = await Promise.allSettled([
+            this.userModel.find({ filter: {} }),
+            this.postModel.find({ filter: {} }),
+        ]);
+        return (0, success_response_1.successResponse)({ res, data: { result } });
+    };
+    changeRole = async (req, res) => {
+        const { userId } = req.params;
+        const { role } = req.body;
+        const denyRole = [role, user_model_1.RoleEnum.superAdmin];
+        if (req.user?.role === user_model_1.RoleEnum.admin) {
+            denyRole.push(user_model_1.RoleEnum.admin);
+        }
+        const user = await this.userModel.findOneAndUpdate({
+            filter: {
+                _id: userId,
+                role: { $nin: denyRole },
+            },
+            update: {
+                role,
+            },
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("fail to find matching result");
+        }
+        return (0, success_response_1.successResponse)({ res });
+    };
+    sendFriendRequest = async (req, res) => {
+        const { userId } = req.params;
+        const checkFriendRequestExists = await this.friendRequestModel.findOne({
+            filter: {
+                createdBy: { $in: [req.user?._id, userId] },
+                sendTo: { $in: [req.user?._id, userId] },
+            },
+        });
+        if (checkFriendRequestExists) {
+            throw new error_response_1.ConflictException("Friend Request Already exists");
+        }
+        const user = await this.userModel.findOne({ filter: { _id: userId } });
+        if (!user) {
+            throw new error_response_1.NotFoundException("In-Valid recipient");
+        }
+        const [friendRequest] = (await this.friendRequestModel.create({
+            data: [
+                {
+                    createdBy: req.user?._id,
+                    sendTo: userId,
+                },
+            ],
+        })) || [];
+        if (!friendRequest) {
+            throw new error_response_1.BadRequestException("Something went wrong!!!!");
+        }
+        return (0, success_response_1.successResponse)({ res });
+    };
+    acceptFriendRequest = async (req, res) => {
+        const { requestId } = req.params;
+        const friendRequest = await this.friendRequestModel.findOneAndUpdate({
+            filter: {
+                _id: requestId,
+                sendTo: req.user?._id,
+                acceptedAt: { $exists: false },
+            },
+            update: {
+                acceptedAt: new Date(),
+            },
+        });
+        if (!friendRequest) {
+            throw new error_response_1.NotFoundException("Fail to find matching result");
+        }
+        await Promise.all([
+            await this.userModel.updateOne({
+                filter: { _id: friendRequest.createdBy },
+                update: {
+                    $addToSet: { friends: friendRequest.sendTo },
+                },
+            }),
+            await this.userModel.updateOne({
+                filter: { _id: friendRequest.sendTo },
+                update: {
+                    $addToSet: { friends: friendRequest.createdBy },
+                },
+            }),
+        ]);
+        return (0, success_response_1.successResponse)({ res });
     };
     freezeAccount = async (req, res) => {
         const { userId } = req.params || {};
@@ -153,6 +253,24 @@ class UserService {
             statusCode: 201,
             data: { credentials },
         });
+    };
+    blockUser = async (req, res) => {
+        const { userId } = req.params;
+        if (req.user?.role !== user_model_1.RoleEnum.admin) {
+            throw new error_response_1.ForbiddenException("not authorized user");
+        }
+        const targetUserId = new mongoose_1.Types.ObjectId(userId);
+        const user = await this.userModel.updateOne({
+            filter: { _id: targetUserId, blockedAt: { $exists: false } },
+            update: {
+                blockedAt: new Date(),
+                blockedBy: req.user?._id,
+            },
+        });
+        if (!user.matchedCount) {
+            throw new error_response_1.NotFoundException("user not found or already blocked");
+        }
+        return (0, success_response_1.successResponse)({ res });
     };
 }
 exports.default = new UserService();

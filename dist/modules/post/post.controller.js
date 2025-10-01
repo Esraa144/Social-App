@@ -39,7 +39,17 @@ const authentication_middleware_1 = require("../../middleware/authentication.mid
 const cloud_multer_1 = require("../../utils/multer/cloud.multer");
 const validation_middleware_1 = require("../../middleware/validation.middleware");
 const validators = __importStar(require("./post.validation"));
+const comment_1 = require("../comment");
+const model_1 = require("../../DB/model");
 const router = (0, express_1.Router)();
+router.use("/:postId/comment", comment_1.commentRouter);
 router.post("/", (0, authentication_middleware_1.authentication)(), (0, cloud_multer_1.cloudFileUpload)({ validation: cloud_multer_1.fileValidation.image }).array("attachments", 2), (0, validation_middleware_1.validation)(validators.createPost), post_service_1.postService.createPost);
+router.patch("/:postId/tags", (0, validation_middleware_1.validation)(validators.postTags), post_service_1.postService.updatePostTags);
+router.get("/:postId", (0, authentication_middleware_1.authorization)([model_1.RoleEnum.admin]), (0, validation_middleware_1.validation)(validators.getPostById), post_service_1.postService.getPostById);
+router.get("/comment/:commentId", (0, authentication_middleware_1.authorization)([model_1.RoleEnum.admin]), (0, validation_middleware_1.validation)(validators.getCommentById), post_service_1.postService.getCommentById);
 router.patch("/:postId/likes", (0, authentication_middleware_1.authentication)(), (0, validation_middleware_1.validation)(validators.likePost), post_service_1.postService.likePost);
+router.patch("/:postId", (0, authentication_middleware_1.authentication)(), (0, cloud_multer_1.cloudFileUpload)({ validation: cloud_multer_1.fileValidation.image }).array("attachments", 2), (0, validation_middleware_1.validation)(validators.updatePost), post_service_1.postService.updatePost);
+router.delete("/:postId/freeze", (0, authentication_middleware_1.authentication)(), (0, validation_middleware_1.validation)(validators.freezePost), post_service_1.postService.freezePost);
+router.delete("/:postId", (0, authentication_middleware_1.authorization)([model_1.RoleEnum.admin]), (0, validation_middleware_1.validation)(validators.deletePost), post_service_1.postService.deletePost);
+router.get("/", (0, authentication_middleware_1.authentication)(), post_service_1.postService.postList);
 exports.default = router;

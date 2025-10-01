@@ -7,9 +7,11 @@ const verify_template_email_1 = require("../email/verify.template.email");
 exports.emailEvent = new node_events_1.EventEmitter();
 exports.emailEvent.on("ConfirmEmail", async (data) => {
     try {
+        console.log(">>> ConfirmEmail event triggered", data);
         data.subject = "Confirm-Email";
         data.html = (0, verify_template_email_1.verifyEmail)({ otp: data.otp, title: "Email Confirmation" });
         await (0, send_email_1.sendEmail)(data);
+        console.log(">>> Email sent successfully");
     }
     catch (error) {
         console.log(`Fail to send email`, error);
@@ -23,5 +25,14 @@ exports.emailEvent.on("resetPassword", async (data) => {
     }
     catch (error) {
         console.log(`Fail to send email`, error);
+    }
+});
+exports.emailEvent.on("TagNotification", async (data) => {
+    try {
+        await (0, send_email_1.sendEmail)(data);
+        console.log("Tag email sent to:", data.to);
+    }
+    catch (error) {
+        console.error("Failed to send tag email:", error);
     }
 });

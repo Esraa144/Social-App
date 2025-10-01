@@ -122,32 +122,42 @@ class AuthenticationService {
    * return{message:"Done",StatusCode:201}
    */
   signup = async (req: Request, res: Response): Promise<Response> => {
-    let { userName, email, password }: ISignupBodyInputsDTto = req.body;
-    console.log({ userName, email, password });
+    try {
+      const { userName, email, password }: ISignupBodyInputsDTto = req.body;
+      console.log({ userName, email, password });
 
-    const checkUserExist = await this.userModel.findOne({
-      filter: { email },
-      select: "email",
-      options: { lean: true },
-    });
-    if (checkUserExist) {
-      throw new ConflictException("Email Exist");
+      const checkUserExist = await this.userModel.findOne({
+        filter: { email },
+        select: "email",
+        options: { lean: true },
+      });
+      if (checkUserExist) {
+        throw new ConflictException("Email Exist");
+      }
+
+      const otp = generateNumberOtp();
+      console.log("Generated OTP:", otp);
+
+      await this.userModel.createUser({
+        data: [
+          {
+            userName,
+            email,
+            password,
+            confirmEmailOtp: `${otp}`,
+          },
+        ],
+        options: { validateBeforeSave: true },
+      });
+      console.log("User created in DB");
+
+      emailEvent.emit("ConfirmEmail", { to: email, otp: String(otp) });
+      console.log("Email Event Emitted");
+      return successResponse({ res, statusCode: 201 });
+    } catch (err: any) {
+      console.error(">>> Signup Error:", err.message, err.stack);
+      throw err;
     }
-
-    const otp = generateNumberOtp();
-    await this.userModel.createUser({
-      data: [
-        {
-          userName,
-          email,
-          password,
-          confirmEmailOtp: `${otp}`,
-        },
-      ],
-      options: { validateBeforeSave: true },
-    });
-
-    return successResponse({ res, statusCode: 201 });
   };
 
   confirmEmail = async (req: Request, res: Response): Promise<Response> => {

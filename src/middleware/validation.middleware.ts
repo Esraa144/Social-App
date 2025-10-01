@@ -19,7 +19,7 @@ export const validation = (schema: SchemaType) => {
     for (const key of reqKey) {
       if (schema[key]) {
         const result = schema[key].safeParse(req[key]);
-        // console.log(result);
+        console.log(result);
         if (!result.success) {
           const issues = result.error?.issues?.map((issue) => ({
             path: issue.path,
@@ -35,7 +35,6 @@ export const validation = (schema: SchemaType) => {
     next();
   };
 };
-
 export const generalFields = {
   userName: z
     .string({ error: "User Name is required" })

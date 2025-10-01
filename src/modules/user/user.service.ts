@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import {
+  IBlockUserDTO,
   IFreezeAccountDTO,
   IHardDeleteAccountDTO,
   ILogoutDto,
@@ -30,17 +31,22 @@ import {
 import { StorageEnum } from "../../utils/multer/cloud.multer";
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
-  UnauthorizedException,
 } from "../../utils/response/error.response";
 import { s3Event } from "../../utils/multer/s3.events";
 import { successResponse } from "../../utils/response/success.response";
 import { IProfileImageResponse, IUserResponse } from "./user.entities";
 import { ILoginResponse } from "../auth/auth.entities";
+import { FriendRequestRepository, PostRepository } from "../../DB/repository";
+import { FriendRequestModel, PostModel } from "../../DB/model";
 
 class UserService {
   private userModel = new UserRepository(UserModel);
+  private postModel = new PostRepository(PostModel);
+  private friendRequestModel = new FriendRequestRepository(FriendRequestModel);
+
   //   private tokenModel = new TokenRepository(TokenModel);
   constructor() {}
 
@@ -102,11 +108,121 @@ class UserService {
   };
 
   profile = async (req: Request, res: Response): Promise<Response> => {
-    if (!req.user) {
-      throw new UnauthorizedException("missing user details");
+const profile = await this.userModel.findById({id:req.user?._id as Types.ObjectId,options:{
+  populate:[
+    {
+      path:"friends",
+      select:"firstName lastName email gender profilePicture"
+    }
+  ]
+}})
+if(!profile){
+  throw new NotFoundException("fail to find user profile")
+}
+    return successResponse<IUserResponse>({ res, data: { user: profile} });
+  };
+
+  dashboard = async (req: Request, res: Response): Promise<Response> => {
+    const result = await Promise.allSettled([
+      this.userModel.find({ filter: {} }),
+      this.postModel.find({ filter: {} }),
+    ]);
+    return successResponse({ res, data: { result } });
+  };
+
+  changeRole = async (req: Request, res: Response): Promise<Response> => {
+    const { userId } = req.params as unknown as { userId: Types.ObjectId };
+    const { role }: { role: RoleEnum } = req.body;
+    const denyRole: RoleEnum[] = [role, RoleEnum.superAdmin];
+    if (req.user?.role === RoleEnum.admin) {
+      denyRole.push(RoleEnum.admin);
+    }
+    const user = await this.userModel.findOneAndUpdate({
+      filter: {
+        _id: userId as Types.ObjectId,
+        role: { $nin: denyRole },
+      },
+      update: {
+        role,
+      },
+    });
+    if (!user) {
+      throw new NotFoundException("fail to find matching result");
+    }
+    return successResponse({ res });
+  };
+
+  sendFriendRequest = async (
+    req: Request,
+    res: Response
+  ): Promise<Response> => {
+    const { userId } = req.params as unknown as { userId: Types.ObjectId };
+    const checkFriendRequestExists = await this.friendRequestModel.findOne({
+      filter: {
+        createdBy: { $in: [req.user?._id, userId] },
+        sendTo: { $in: [req.user?._id, userId] },
+      },
+    });
+    if (checkFriendRequestExists) {
+      throw new ConflictException("Friend Request Already exists");
     }
 
-    return successResponse<IUserResponse>({ res, data: { user: req.user } });
+    const user = await this.userModel.findOne({ filter: { _id: userId } });
+    if (!user) {
+      throw new NotFoundException("In-Valid recipient");
+    }
+    const [friendRequest] =
+      (await this.friendRequestModel.create({
+        data: [
+          {
+            createdBy: req.user?._id as Types.ObjectId,
+            sendTo: userId,
+          },
+        ],
+      })) || [];
+
+    if (!friendRequest) {
+      throw new BadRequestException("Something went wrong!!!!");
+    }
+    return successResponse({ res });
+  };
+
+  acceptFriendRequest = async (
+    req: Request,
+    res: Response
+  ): Promise<Response> => {
+    const { requestId } = req.params as unknown as {
+      requestId: Types.ObjectId;
+    };
+    const friendRequest = await this.friendRequestModel.findOneAndUpdate({
+      filter: {
+        _id: requestId,
+        sendTo: req.user?._id,
+        acceptedAt: { $exists: false },
+      },
+      update: {
+        acceptedAt: new Date(),
+      },
+    });
+    if (!friendRequest) {
+      throw new NotFoundException("Fail to find matching result");
+    }
+
+    await Promise.all([
+      await this.userModel.updateOne({
+        filter: { _id: friendRequest.createdBy },
+        update: {
+          $addToSet: { friends: friendRequest.sendTo },
+        },
+      }),
+      await this.userModel.updateOne({
+        filter: { _id: friendRequest.sendTo },
+        update: {
+          $addToSet: { friends: friendRequest.createdBy },
+        },
+      }),
+    ]);
+    return successResponse({ res });
   };
 
   freezeAccount = async (req: Request, res: Response): Promise<Response> => {
@@ -216,6 +332,30 @@ class UserService {
       statusCode: 201,
       data: { credentials },
     });
+  };
+
+  blockUser = async (req: Request, res: Response): Promise<Response> => {
+    const { userId } = req.params as IBlockUserDTO;
+
+    if (req.user?.role !== RoleEnum.admin) {
+      throw new ForbiddenException("not authorized user");
+    }
+
+    const targetUserId = new Types.ObjectId(userId);
+
+    const user = await this.userModel.updateOne({
+      filter: { _id: targetUserId, blockedAt: { $exists: false } },
+      update: {
+        blockedAt: new Date(),
+        blockedBy: req.user?._id,
+      },
+    });
+
+    if (!user.matchedCount) {
+      throw new NotFoundException("user not found or already blocked");
+    }
+
+    return successResponse({ res });
   };
 }
 

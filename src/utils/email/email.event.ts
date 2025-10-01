@@ -9,9 +9,12 @@ interface IEmail extends Mail.Options {
 }
 emailEvent.on("ConfirmEmail", async (data: IEmail) => {
   try {
+    console.log(">>> ConfirmEmail event triggered", data);
+
     data.subject = "Confirm-Email";
     data.html = verifyEmail({ otp: data.otp, title: "Email Confirmation" });
     await sendEmail(data);
+    console.log(">>> Email sent successfully");
   } catch (error) {
     console.log(`Fail to send email`, error);
   }
@@ -26,3 +29,13 @@ emailEvent.on("resetPassword", async (data: IEmail) => {
     console.log(`Fail to send email`, error);
   }
 });
+
+emailEvent.on("TagNotification", async (data) => {
+  try {
+    await sendEmail(data);
+    console.log("Tag email sent to:", data.to);
+  } catch (error) {
+    console.error("Failed to send tag email:", error);
+  }
+});
+

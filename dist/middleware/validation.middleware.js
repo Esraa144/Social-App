@@ -14,6 +14,7 @@ const validation = (schema) => {
         for (const key of reqKey) {
             if (schema[key]) {
                 const result = schema[key].safeParse(req[key]);
+                console.log(result);
                 if (!result.success) {
                     const issues = result.error?.issues?.map((issue) => ({
                         path: issue.path,
