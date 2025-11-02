@@ -147,7 +147,7 @@ export const uploadFiles = async ({
 export const createPreSignedUploadLink = async ({
   Bucket = process.env.AWS_BUCKET_NAME as string,
   path = "general",
-  expiresIn = Number(process.env.AWS_PRE_SIGNED_URL_EXPIRES_IN_SECOND),
+  expiresIn = 30000,
   ContentType,
   originalname,
 }: {
@@ -164,6 +164,8 @@ export const createPreSignedUploadLink = async ({
     }/${path}/${uuid()}_pre_${originalname}`,
     ContentType,
   });
+  console.log("🔥 expiresIn value:", Number(expiresIn), typeof expiresIn);
+
   const url = await getSignedUrl(s3Config(), command, { expiresIn });
 
   if (!url || !command?.input?.Key) {
@@ -241,7 +243,7 @@ export const deleteFiles = async ({
   const Objects = urls.map((url) => {
     return { Key: url };
   });
-  console.log(Objects);
+  // console.log(Objects);
 
   const command = new DeleteObjectsCommand({
     Bucket,

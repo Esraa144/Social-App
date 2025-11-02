@@ -12,6 +12,7 @@ const success_response_1 = require("../../utils/response/success.response");
 const repository_1 = require("../../DB/repository");
 const model_1 = require("../../DB/model");
 class UserService {
+    chatModel = new repository_1.ChatRepository(model_1.ChatModel);
     userModel = new user_repository_1.UserRepository(user_model_1.UserModel);
     postModel = new repository_1.PostRepository(model_1.PostModel);
     friendRequestModel = new repository_1.FriendRequestRepository(model_1.FriendRequestModel);
@@ -26,8 +27,8 @@ class UserService {
         const user = await this.userModel.findByIdAndUpdate({
             id: req.user?._id,
             update: {
-                profileImag: key,
-                temProfileImage: req.user?.profileImage,
+                profilePicture: key,
+                temProfileImage: req.user?.profilePicture,
             },
         });
         if (!user) {
@@ -35,7 +36,7 @@ class UserService {
         }
         s3_events_1.s3Event.emit("trackProfileImageUpload", {
             userId: req.user?._id,
-            oldKey: req.user?.profileImage,
+            oldKey: req.user?.profilePicture,
             key,
             expiresIn: 30000,
         });
@@ -63,18 +64,27 @@ class UserService {
         return (0, success_response_1.successResponse)({ res, data: { user } });
     };
     profile = async (req, res) => {
-        const profile = await this.userModel.findById({ id: req.user?._id, options: {
+        const user = await this.userModel.findById({
+            id: req.user?._id,
+            options: {
                 populate: [
                     {
                         path: "friends",
-                        select: "firstName lastName email gender profilePicture"
-                    }
-                ]
-            } });
-        if (!profile) {
+                        select: "firstName lastName email gender profilePicture",
+                    },
+                ],
+            },
+        });
+        if (!user) {
             throw new error_response_1.NotFoundException("fail to find user profile");
         }
-        return (0, success_response_1.successResponse)({ res, data: { user: profile } });
+        const groups = await this.chatModel.find({
+            filter: {
+                participants: { $in: req.user?._id },
+                group: { $exists: true }
+            }
+        });
+        return (0, success_response_1.successResponse)({ res, data: { user, groups } });
     };
     dashboard = async (req, res) => {
         const result = await Promise.allSettled([

@@ -47,7 +47,7 @@ class AuthenticationService {
                     firstName: given_name,
                     lastName: family_name,
                     email: email,
-                    profileImage: picture,
+                    profilePicture: picture,
                     confirmedAt: new Date(),
                     provider: user_model_1.ProviderEnum.GOOGLE,
                 },

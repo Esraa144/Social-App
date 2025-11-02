@@ -73,7 +73,7 @@ class AuthenticationService {
             firstName: given_name as string,
             lastName: family_name as string,
             email: email as string,
-            profileImage: picture as string,
+            profilePicture: picture as string,
             confirmedAt: new Date(),
             provider: ProviderEnum.GOOGLE,
           },

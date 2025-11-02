@@ -14,7 +14,7 @@ var StorageEnum;
     StorageEnum["disk"] = "disk";
 })(StorageEnum || (exports.StorageEnum = StorageEnum = {}));
 exports.fileValidation = {
-    image: ["image/jpeg", "image/png", "image/gif"],
+    image: ["image/jpeg", "image/jpg", "image/png", "image/gif"],
 };
 const cloudFileUpload = ({ validation = [], storageApproach = StorageEnum.memory, maxSizeMB = 2, }) => {
     const storage = storageApproach === StorageEnum.memory

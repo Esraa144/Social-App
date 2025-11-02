@@ -1,37 +1,37 @@
 //SETUP-ENV
-import { resolve } from "node:path";
 import { config } from "dotenv";
+import { resolve } from "node:path";
 config({ path: resolve("./config/.env.development") });
 
 //LOAD EXPRESS AND EXPRESS TYPE
-import type { Request, Response, Express } from "express";
+import type { Express, Request, Response } from "express";
 import express from "express";
 
 //THIRD PARTY MIDDLEWARE
 import cors from "cors";
-import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
+import helmet from "helmet";
 
 //MODULE ROUTING
-import { authRouter, postRouter, userRouter } from "./modules";
+import { authRouter, initializeIo, postRouter, userRouter } from "./modules";
 
+import { pipeline } from "node:stream";
+import { promisify } from "node:util";
+import connectDB from "./DB/connection.db";
+import {getFile,} from "./utils/multer/s3.config";
 import {
   BadRequestException,
   globalErrorHandling,
 } from "./utils/response/error.response";
-import connectDB from "./DB/connection.db";
-import {
-  createGetPreSignedLink,
-  //  deleteFile,
-  // deleteFiles,
-  // deleteFolderByPrefix,
-  getFile,
-} from "./utils/multer/s3.config";
-import { promisify } from "node:util";
-import { pipeline } from "node:stream";
+import { chatRouter } from "./modules/chat";
 const createS3WriteStreamPipe = promisify(pipeline);
 
-//HANDEL BASE RATE LIMIT ON ALL API REQUESTS
+//START-POINT
+const bootstrap = async (): Promise<void> => {
+  const port: number | string = process.env.PORT || 5000;
+  const app: Express = express();
+
+  //HANDEL BASE RATE LIMIT ON ALL API REQUESTS
 const limiter = rateLimit({
   windowMs: 60 * 60000,
   limit: 2000,
@@ -39,13 +39,8 @@ const limiter = rateLimit({
   statusCode: 429,
 });
 
-//START-POINT
-const bootstrap = async (): Promise<void> => {
-  const port: number | string = process.env.PORT || 5000;
-  const app: Express = express();
-
   //GLOBAL MIDDLEWARE
-  app.use(cors(), express.json(), helmet(), limiter);
+  app.use(cors({ origin: "*" }), express.json(), helmet(), limiter);
 
   //app-routing
   app.get("/", (req: Request, res: Response) => {
@@ -55,60 +50,25 @@ const bootstrap = async (): Promise<void> => {
   app.use("/auth", authRouter);
   app.use("/user", userRouter);
   app.use("/post", postRouter);
+  app.use("/chat",chatRouter)
   //get assets
+
   app.get(
     "/upload/*path",
     async (req: Request, res: Response): Promise<void> => {
-      const { downloadName, download = "false" } = req.query as {
-        downloadName?: string;
-        download?: string;
-      };
       const { path } = req.params as unknown as { path: string[] };
       const Key = path.join("/");
       const s3Response = await getFile({ Key });
-      console.log(s3Response.Body);
-      if (!s3Response?.Body) {
-        throw new BadRequestException("fail to fetch this asset");
-      }
-      res.setHeader(
-        "Content-type",
-        `${s3Response.ContentType || "application/octet-stream"}`
-      );
 
-      if (download === "true") {
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="${downloadName || Key.split("/").pop()}"`
-        );
+      if (!s3Response?.Body) {
+        throw new BadRequestException("fail to get file from s3");
       }
+      res.set("Cross-Origin-Resource-Policy", "cross-origin");
+      res.setHeader("Content-Type", s3Response.ContentType as string);
       return await createS3WriteStreamPipe(
         s3Response.Body as NodeJS.ReadableStream,
         res
       );
-    }
-  );
-
-  app.get(
-    "/upload/pre-signed/*path",
-    async (req: Request, res: Response): Promise<Response> => {
-      const {
-        downloadName,
-        download = "false",
-        expiresIn = 120,
-      } = req.query as {
-        downloadName?: string;
-        download?: string;
-        expiresIn?: number;
-      };
-      const { path } = req.params as unknown as { path: string[] };
-      const Key = path.join("/");
-      const url = await createGetPreSignedLink({
-        Key,
-        downloadName: downloadName as string,
-        download,
-        expiresIn,
-      });
-      return res.json({ message: "Done", data: { url } });
     }
   );
 
@@ -126,9 +86,10 @@ const bootstrap = async (): Promise<void> => {
   await connectDB();
 
   //START SERVER
-  app.listen(port, () => {
+  const httpServer = app.listen(port, () => {
     console.log(`Server Is Running On Port: ${port} 🚀 `);
   });
+  initializeIo(httpServer)
 };
 
 export default bootstrap;

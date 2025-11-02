@@ -39,12 +39,13 @@ import { s3Event } from "../../utils/multer/s3.events";
 import { successResponse } from "../../utils/response/success.response";
 import { IProfileImageResponse, IUserResponse } from "./user.entities";
 import { ILoginResponse } from "../auth/auth.entities";
-import { FriendRequestRepository, PostRepository } from "../../DB/repository";
-import { FriendRequestModel, PostModel } from "../../DB/model";
+import { ChatRepository, FriendRequestRepository, PostRepository } from "../../DB/repository";
+import { ChatModel, FriendRequestModel, PostModel } from "../../DB/model";
 
 class UserService {
-  private userModel = new UserRepository(UserModel);
-  private postModel = new PostRepository(PostModel);
+  private chatModel:ChatRepository = new ChatRepository(ChatModel);
+  private userModel:UserRepository = new UserRepository(UserModel);
+  private postModel:PostRepository = new PostRepository(PostModel);
   private friendRequestModel = new FriendRequestRepository(FriendRequestModel);
 
   //   private tokenModel = new TokenRepository(TokenModel);
@@ -63,8 +64,8 @@ class UserService {
     const user = await this.userModel.findByIdAndUpdate({
       id: req.user?._id as Types.ObjectId,
       update: {
-        profileImag: key,
-        temProfileImage: req.user?.profileImage,
+        profilePicture: key,
+        temProfileImage: req.user?.profilePicture,
       },
     });
     if (!user) {
@@ -73,7 +74,7 @@ class UserService {
 
     s3Event.emit("trackProfileImageUpload", {
       userId: req.user?._id,
-      oldKey: req.user?.profileImage,
+      oldKey: req.user?.profilePicture,
       key,
       expiresIn: 30000,
     });
@@ -108,18 +109,27 @@ class UserService {
   };
 
   profile = async (req: Request, res: Response): Promise<Response> => {
-const profile = await this.userModel.findById({id:req.user?._id as Types.ObjectId,options:{
-  populate:[
-    {
-      path:"friends",
-      select:"firstName lastName email gender profilePicture"
+    const user = await this.userModel.findById({
+      id: req.user?._id as Types.ObjectId,
+      options: {
+        populate: [
+          {
+            path: "friends",
+            select: "firstName lastName email gender profilePicture",
+          },
+        ],
+      },
+    });
+    if (!user) {
+      throw new NotFoundException("fail to find user profile");
     }
-  ]
-}})
-if(!profile){
-  throw new NotFoundException("fail to find user profile")
-}
-    return successResponse<IUserResponse>({ res, data: { user: profile} });
+    const groups = await this.chatModel.find({
+      filter:{
+        participants:{$in:req.user?._id as Types.ObjectId},
+        group:{$exists:true}
+      }
+    })
+    return successResponse<IUserResponse>({ res, data: { user , groups } });
   };
 
   dashboard = async (req: Request, res: Response): Promise<Response> => {

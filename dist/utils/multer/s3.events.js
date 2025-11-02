@@ -19,14 +19,16 @@ exports.s3Event.on("trackProfileImageUpload", (data) => {
                 },
             });
             await (0, s3_config_1.deleteFile)({ Key: data.oldKey });
-            console.log(`Done`);
         }
         catch (error) {
-            console.log(error);
             if (error.Code === "NoSuchKey") {
+                let unsetData = { temProfileImage: 1 };
+                if (!data.oldKey) {
+                    unsetData = { temProfileImage: 1, profilePicture: 1 };
+                }
                 await userModel.updateOne({
                     filter: { _id: data.userId },
-                    update: { profileImage: data.oldKey, $unset: { temProfileImage: 1 } },
+                    update: { profilePicture: data.oldKey, $unset: unsetData },
                 });
             }
         }

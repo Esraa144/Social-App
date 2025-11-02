@@ -85,12 +85,13 @@ const uploadFiles = async ({ storageApproach = cloud_multer_1.StorageEnum.memory
     return urls;
 };
 exports.uploadFiles = uploadFiles;
-const createPreSignedUploadLink = async ({ Bucket = process.env.AWS_BUCKET_NAME, path = "general", expiresIn = Number(process.env.AWS_PRE_SIGNED_URL_EXPIRES_IN_SECOND), ContentType, originalname, }) => {
+const createPreSignedUploadLink = async ({ Bucket = process.env.AWS_BUCKET_NAME, path = "general", expiresIn = 30000, ContentType, originalname, }) => {
     const command = new client_s3_1.PutObjectCommand({
         Bucket,
         Key: `${process.env.APPLICATION_NAME}/${path}/${(0, uuid_1.v4)()}_pre_${originalname}`,
         ContentType,
     });
+    console.log("🔥 expiresIn value:", Number(expiresIn), typeof expiresIn);
     const url = await (0, s3_request_presigner_1.getSignedUrl)((0, exports.s3Config)(), command, { expiresIn });
     if (!url || !command?.input?.Key) {
         throw new error_response_1.BadRequestException("Fail to create pre signed url");
@@ -133,7 +134,6 @@ const deleteFiles = async ({ Bucket = process.env.AWS_BUCKET_NAME, urls, Quiet =
     const Objects = urls.map((url) => {
         return { Key: url };
     });
-    console.log(Objects);
     const command = new client_s3_1.DeleteObjectsCommand({
         Bucket,
         Delete: {

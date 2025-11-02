@@ -31,6 +31,7 @@ import {
 import { Types, UpdateQuery } from "mongoose";
 import { CommentModel } from "../../DB/model";
 import { emailEvent } from "../../utils/email/email.event";
+import { connectedSockets, getIo } from "../gateway";
 
 export const postAvailability = (req: Request) => {
   return [
@@ -197,6 +198,9 @@ class PostService {
     });
     if (!post) {
       throw new NotFoundException("In-Valid post Id or post not exist");
+    }
+    if(action !== LikeActionEnum.unlike){
+      getIo().to(connectedSockets.get(post.createdBy.toString()) as string).emit("likePost",{postId,userId:req.user?._id})
     }
     return successResponse({ res });
   };

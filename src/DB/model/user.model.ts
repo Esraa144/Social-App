@@ -34,7 +34,7 @@ export interface IUser {
 
   phone?: string;
   address?: string;
-  profileImage?: string;
+  profilePicture?: string;
   temProfileImage?: string;
   coverImages?: string[];
 
@@ -77,7 +77,7 @@ const userSchema = new Schema<IUser>(
     phone: { type: String },
     address: { type: String },
 
-    profileImage: { type: String },
+    profilePicture: { type: String },
     temProfileImage: { type: String },
     coverImages: [String],
     gender: { type: String, enum: GenderEnum, default: GenderEnum.male },
